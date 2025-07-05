@@ -1,44 +1,81 @@
 
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Package, Clock, CheckCircle, AlertCircle, Truck } from "lucide-react";
+import { useStore } from "@/store/useStore";
+import { apiService } from "@/services/api";
+import { useToast } from "@/hooks/use-toast";
 
 const FulfillmentQueue = () => {
+  const { orders, isLoading, setOrders, setLoading } = useStore();
+  const { toast } = useToast();
+
   const fulfillmentStats = {
-    pending: 247,
-    inProgress: 89,
-    packed: 156,
-    shipped: 1431
+    pending: orders.filter(o => o.status === 'pending').length,
+    inProgress: orders.filter(o => o.status === 'in-progress').length,
+    packed: orders.filter(o => o.status === 'packed').length,
+    shipped: orders.filter(o => o.status === 'shipped').length
   };
 
-  const urgentOrders = [
-    {
-      id: "BO-2024-001",
-      customer: "Holiday Box - Premium",
-      dueDate: "Today",
-      items: 8,
-      status: "pending",
-      priority: "high"
-    },
-    {
-      id: "BO-2024-002", 
-      customer: "Monthly Essentials",
-      dueDate: "Tomorrow",
-      items: 5,
-      status: "in-progress",
-      priority: "normal"
-    },
-    {
-      id: "BO-2024-003",
-      customer: "Quarterly Deluxe",
-      dueDate: "Dec 16",
-      items: 12,
-      status: "pending",
-      priority: "high"
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  const loadOrders = async () => {
+    try {
+      setLoading(true);
+      const data = await apiService.getOrders();
+      setOrders(data);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load orders",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const handleUpdateOrderStatus = async (orderId: number, newStatus: string) => {
+    try {
+      setLoading(true);
+      await apiService.updateOrderStatus(orderId, newStatus);
+      
+      toast({
+        title: "Success",
+        description: `Order status updated to ${newStatus}`,
+      });
+      
+      // Reload orders
+      await loadOrders();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update order status",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewAll = () => {
+    toast({
+      title: "View All Orders",
+      description: "Opening full order management interface",
+    });
+  };
+
+  const handleStartFulfillment = () => {
+    toast({
+      title: "Fulfillment Workflow Started",
+      description: "Beginning fulfillment process for pending orders",
+    });
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -68,6 +105,23 @@ const FulfillmentQueue = () => {
     );
   };
 
+  const getNextStatus = (currentStatus: string) => {
+    switch (currentStatus) {
+      case 'pending':
+        return 'in-progress';
+      case 'in-progress':
+        return 'packed';
+      case 'packed':
+        return 'shipped';
+      default:
+        return currentStatus;
+    }
+  };
+
+  const urgentOrders = orders.filter(order => 
+    order.priority === 'high' || order.status === 'pending'
+  ).slice(0, 3);
+
   return (
     <Card className="border-0 shadow-sm">
       <CardHeader>
@@ -76,7 +130,9 @@ const FulfillmentQueue = () => {
             <Package className="h-5 w-5 mr-2 text-purple-600" />
             Fulfillment Queue
           </div>
-          <Button size="sm">View All</Button>
+          <Button size="sm" onClick={handleViewAll}>
+            View All
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -107,7 +163,7 @@ const FulfillmentQueue = () => {
                 <div className="flex items-center space-x-3">
                   {getStatusIcon(order.status)}
                   <div>
-                    <div className="font-medium text-slate-900">{order.id}</div>
+                    <div className="font-medium text-slate-900">{order.orderId}</div>
                     <div className="text-sm text-slate-600">{order.customer}</div>
                     <div className="text-xs text-slate-500">{order.items} items</div>
                   </div>
@@ -119,15 +175,31 @@ const FulfillmentQueue = () => {
                       <AlertCircle className="h-4 w-4 text-red-500" />
                     )}
                   </div>
-                  <div className="text-xs text-slate-500">Due: {order.dueDate}</div>
+                  <div className="text-xs text-slate-500 mb-2">Due: {order.dueDate}</div>
+                  {order.status !== 'shipped' && (
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => handleUpdateOrderStatus(order.id, getNextStatus(order.status))}
+                      disabled={isLoading}
+                    >
+                      {getNextStatus(order.status) === 'in-progress' && 'Start'}
+                      {getNextStatus(order.status) === 'packed' && 'Pack'}
+                      {getNextStatus(order.status) === 'shipped' && 'Ship'}
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        <Button className="w-full">
-          Start Fulfillment Workflow
+        <Button 
+          className="w-full" 
+          onClick={handleStartFulfillment}
+          disabled={isLoading || fulfillmentStats.pending === 0}
+        >
+          {isLoading ? "Processing..." : "Start Fulfillment Workflow"}
         </Button>
       </CardContent>
     </Card>

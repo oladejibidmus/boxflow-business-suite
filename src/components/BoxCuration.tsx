@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,65 +7,126 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Package, Plus, Search, DollarSign, Package as PackageIcon } from "lucide-react";
+import { useStore } from "@/store/useStore";
+import { apiService } from "@/services/api";
+import { useToast } from "@/hooks/use-toast";
 
 const BoxCuration = () => {
-  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const { 
+    products, 
+    selectedProducts, 
+    isLoading,
+    setProducts, 
+    toggleProductSelection, 
+    clearSelectedProducts,
+    setLoading 
+  } = useStore();
+  
+  const { toast } = useToast();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [boxName, setBoxName] = useState("");
+  const [boxTheme, setBoxTheme] = useState("");
+  const [shipDate, setShipDate] = useState("");
+  const [description, setDescription] = useState("");
 
-  const products = [
-    {
-      id: "1",
-      name: "Artisan Coffee Beans",
-      category: "Beverages",
-      cost: 12.50,
-      retail: 18.99,
-      stock: 156,
-      supplier: "Local Roasters Co.",
-      image: "/placeholder.svg"
-    },
-    {
-      id: "2", 
-      name: "Organic Dark Chocolate",
-      category: "Snacks",
-      cost: 8.25,
-      retail: 14.99,
-      stock: 89,
-      supplier: "Bean to Bar Ltd.",
-      image: "/placeholder.svg"
-    },
-    {
-      id: "3",
-      name: "Handmade Ceramic Mug",
-      category: "Lifestyle",
-      cost: 15.00,
-      retail: 24.99,
-      stock: 34,
-      supplier: "Artisan Pottery",
-      image: "/placeholder.svg"
-    },
-    {
-      id: "4",
-      name: "Premium Tea Blend",
-      category: "Beverages", 
-      cost: 9.75,
-      retail: 16.99,
-      stock: 127,
-      supplier: "Mountain Tea Co.",
-      image: "/placeholder.svg"
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  const loadProducts = async () => {
+    try {
+      setLoading(true);
+      const data = await apiService.getProducts();
+      setProducts(data);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load products",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-  ];
-
-  const toggleProductSelection = (productId: string) => {
-    setSelectedProducts(prev => 
-      prev.includes(productId) 
-        ? prev.filter(id => id !== productId)
-        : [...prev, productId]
-    );
   };
 
-  const selectedProductDetails = products.filter(p => selectedProducts.includes(p.id));
-  const totalCost = selectedProductDetails.reduce((sum, p) => sum + p.cost, 0);
-  const totalRetail = selectedProductDetails.reduce((sum, p) => sum + p.retail, 0);
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    product.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const selectedProductDetails = products.filter(p => selectedProducts.includes(p.id.toString()));
+  const totalCost = selectedProductDetails.reduce((sum, p) => sum + parseFloat(p.cost), 0);
+  const totalRetail = selectedProductDetails.reduce((sum, p) => sum + parseFloat(p.retail), 0);
   const margin = totalRetail > 0 ? ((totalRetail - totalCost) / totalRetail * 100) : 0;
+
+  const handleSaveBox = async () => {
+    if (!boxName.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Box name is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (selectedProducts.length === 0) {
+      toast({
+        title: "Validation Error", 
+        description: "Please select at least one product",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await apiService.createBox({
+        name: boxName,
+        theme: boxTheme,
+        shipDate: shipDate,
+        description: description,
+        products: selectedProducts,
+        totalCost: totalCost.toString(),
+        totalRetail: totalRetail.toString(),
+      });
+
+      toast({
+        title: "Success",
+        description: "Box configuration saved successfully",
+      });
+
+      // Reset form
+      setBoxName("");
+      setBoxTheme("");
+      setShipDate("");
+      setDescription("");
+      clearSelectedProducts();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save box configuration",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateNewBox = () => {
+    setBoxName("");
+    setBoxTheme("");
+    setShipDate("");
+    setDescription("");
+    clearSelectedProducts();
+    toast({
+      title: "New Box",
+      description: "Ready to create a new box configuration",
+    });
+  };
+
+  if (isLoading && products.length === 0) {
+    return <div className="flex justify-center items-center h-64">Loading products...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -74,7 +135,7 @@ const BoxCuration = () => {
           <h2 className="text-2xl font-bold text-slate-900">Box Curation</h2>
           <p className="text-slate-600">Create and manage subscription box contents</p>
         </div>
-        <Button>
+        <Button onClick={handleCreateNewBox}>
           <Plus className="h-4 w-4 mr-2" />
           Create New Box
         </Button>
@@ -88,14 +149,19 @@ const BoxCuration = () => {
                 <span>Product Selection</span>
                 <div className="flex items-center space-x-2">
                   <Search className="h-4 w-4 text-slate-400" />
-                  <Input placeholder="Search products..." className="w-64" />
+                  <Input 
+                    placeholder="Search products..." 
+                    className="w-64"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
                 </div>
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {products.map((product) => {
-                  const isSelected = selectedProducts.includes(product.id);
+                {filteredProducts.map((product) => {
+                  const isSelected = selectedProducts.includes(product.id.toString());
                   const isLowStock = product.stock < 50;
                   
                   return (
@@ -106,7 +172,7 @@ const BoxCuration = () => {
                           ? "border-blue-500 bg-blue-50" 
                           : "border-slate-200 hover:border-slate-300"
                       }`}
-                      onClick={() => toggleProductSelection(product.id)}
+                      onClick={() => toggleProductSelection(product.id.toString())}
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center space-x-3">
@@ -195,15 +261,30 @@ const BoxCuration = () => {
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="boxName">Box Name</Label>
-                <Input id="boxName" placeholder="e.g., December Holiday Box" />
+                <Input 
+                  id="boxName" 
+                  placeholder="e.g., December Holiday Box"
+                  value={boxName}
+                  onChange={(e) => setBoxName(e.target.value)}
+                />
               </div>
               <div>
                 <Label htmlFor="boxTheme">Theme</Label>
-                <Input id="boxTheme" placeholder="e.g., Holiday Comfort" />
+                <Input 
+                  id="boxTheme" 
+                  placeholder="e.g., Holiday Comfort"
+                  value={boxTheme}
+                  onChange={(e) => setBoxTheme(e.target.value)}
+                />
               </div>
               <div>
                 <Label htmlFor="shipDate">Ship Date</Label>
-                <Input id="shipDate" type="date" />
+                <Input 
+                  id="shipDate" 
+                  type="date"
+                  value={shipDate}
+                  onChange={(e) => setShipDate(e.target.value)}
+                />
               </div>
               <div>
                 <Label htmlFor="description">Description</Label>
@@ -211,10 +292,16 @@ const BoxCuration = () => {
                   id="description" 
                   placeholder="Describe the box theme and contents..."
                   rows={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
                 />
               </div>
-              <Button className="w-full" disabled={selectedProducts.length === 0}>
-                Save Box Configuration
+              <Button 
+                className="w-full" 
+                disabled={selectedProducts.length === 0 || isLoading}
+                onClick={handleSaveBox}
+              >
+                {isLoading ? "Saving..." : "Save Box Configuration"}
               </Button>
             </CardContent>
           </Card>

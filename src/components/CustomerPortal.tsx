@@ -1,57 +1,96 @@
 
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Users, Search, Mail, Calendar, CreditCard, Package } from "lucide-react";
+import { useStore } from "@/store/useStore";
+import { apiService } from "@/services/api";
+import { useToast } from "@/hooks/use-toast";
 
 const CustomerPortal = () => {
-  const customers = [
-    {
-      id: "1",
-      name: "Sarah Johnson",
-      email: "sarah.j@email.com",
-      plan: "Premium Quarterly",
-      status: "Active",
-      nextBilling: "2024-03-15",
-      totalSpent: "$284.97",
-      joinDate: "2023-06-12",
-      lastOrder: "Dec 2024 Box"
-    },
-    {
-      id: "2",
-      name: "Michael Chen",
-      email: "m.chen@email.com", 
-      plan: "Monthly Essentials",
-      status: "Active",
-      nextBilling: "2024-01-05",
-      totalSpent: "$156.88",
-      joinDate: "2023-11-03",
-      lastOrder: "Dec 2024 Box"
-    },
-    {
-      id: "3",
-      name: "Emma Rodriguez",
-      email: "emma.r@email.com",
-      plan: "Annual Deluxe",
-      status: "Paused",
-      nextBilling: "2024-06-20",
-      totalSpent: "$412.50",
-      joinDate: "2023-01-15",
-      lastOrder: "Nov 2024 Box"
-    },
-    {
-      id: "4",
-      name: "David Kim",
-      email: "d.kim@email.com",
-      plan: "Premium Quarterly", 
-      status: "Active",
-      nextBilling: "2024-02-28",
-      totalSpent: "$189.95",
-      joinDate: "2023-08-22",
-      lastOrder: "Dec 2024 Box"
+  const { customers, isLoading, setCustomers, setLoading } = useStore();
+  const { toast } = useToast();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    loadCustomers();
+  }, []);
+
+  const loadCustomers = async () => {
+    try {
+      setLoading(true);
+      const data = await apiService.getCustomers();
+      setCustomers(data);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load customers",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const filteredCustomers = customers.filter(customer =>
+    customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    customer.plan.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleManageCustomer = async (customerId: number, action: string) => {
+    try {
+      setLoading(true);
+      
+      if (action === 'pause') {
+        await apiService.updateCustomerStatus(customerId, 'Paused');
+        toast({
+          title: "Success",
+          description: "Customer subscription paused",
+        });
+      } else if (action === 'activate') {
+        await apiService.updateCustomerStatus(customerId, 'Active');
+        toast({
+          title: "Success", 
+          description: "Customer subscription activated",
+        });
+      }
+      
+      // Reload customers to reflect changes
+      await loadCustomers();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: `Failed to ${action} customer subscription`,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendNewsletter = () => {
+    toast({
+      title: "Newsletter Sent",
+      description: "Newsletter has been queued for delivery to all active subscribers",
+    });
+  };
+
+  const handleViewCustomer = (customer: any) => {
+    toast({
+      title: "Customer Details",
+      description: `Viewing details for ${customer.name}`,
+    });
+  };
+
+  const handleLoadMore = () => {
+    toast({
+      title: "Loading More",
+      description: "Loading additional customers...",
+    });
+  };
 
   const getStatusBadge = (status: string) => {
     const variants = {
@@ -67,6 +106,10 @@ const CustomerPortal = () => {
     );
   };
 
+  if (isLoading && customers.length === 0) {
+    return <div className="flex justify-center items-center h-64">Loading customers...</div>;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -77,9 +120,14 @@ const CustomerPortal = () => {
         <div className="flex space-x-3">
           <div className="relative">
             <Search className="h-4 w-4 absolute left-3 top-3 text-slate-400" />
-            <Input placeholder="Search customers..." className="pl-9 w-64" />
+            <Input 
+              placeholder="Search customers..." 
+              className="pl-9 w-64"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
-          <Button>
+          <Button onClick={handleSendNewsletter}>
             <Mail className="h-4 w-4 mr-2" />
             Send Newsletter
           </Button>
@@ -92,7 +140,7 @@ const CustomerPortal = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600">Total Customers</p>
-                <p className="text-2xl font-bold text-slate-900">2,847</p>
+                <p className="text-2xl font-bold text-slate-900">{customers.length}</p>
                 <p className="text-xs text-green-600">+12.5% this month</p>
               </div>
               <Users className="h-8 w-8 text-blue-600" />
@@ -131,12 +179,12 @@ const CustomerPortal = () => {
         <CardHeader>
           <CardTitle className="flex items-center">
             <Users className="h-5 w-5 mr-2 text-blue-600" />
-            Customer List
+            Customer List ({filteredCustomers.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {customers.map((customer) => (
+            {filteredCustomers.map((customer) => (
               <div key={customer.id} className="border border-slate-200 rounded-lg p-4 hover:bg-slate-50 transition-colors">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
@@ -158,7 +206,7 @@ const CustomerPortal = () => {
                     </div>
                     
                     <div className="text-center">
-                      <p className="text-sm font-medium text-slate-900">{customer.totalSpent}</p>
+                      <p className="text-sm font-medium text-slate-900">${customer.totalSpent}</p>
                       <p className="text-xs text-slate-500">Total Spent</p>
                     </div>
                     
@@ -172,8 +220,20 @@ const CustomerPortal = () => {
                     </div>
                     
                     <div className="flex space-x-2">
-                      <Button size="sm" variant="outline">View</Button>
-                      <Button size="sm">Manage</Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => handleViewCustomer(customer)}
+                      >
+                        View
+                      </Button>
+                      <Button 
+                        size="sm"
+                        onClick={() => handleManageCustomer(customer.id, customer.status === 'Active' ? 'pause' : 'activate')}
+                        disabled={isLoading}
+                      >
+                        {customer.status === 'Active' ? 'Pause' : 'Activate'}
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -187,7 +247,9 @@ const CustomerPortal = () => {
           </div>
           
           <div className="mt-6 flex justify-center">
-            <Button variant="outline">Load More Customers</Button>
+            <Button variant="outline" onClick={handleLoadMore}>
+              Load More Customers
+            </Button>
           </div>
         </CardContent>
       </Card>

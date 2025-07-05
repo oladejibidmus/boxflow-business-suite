@@ -1,11 +1,16 @@
 
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Calendar, Clock, Users } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const SubscriptionOverview = () => {
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+
   const subscriptionPlans = [
     {
       name: "Monthly Essentials",
@@ -16,7 +21,7 @@ const SubscriptionOverview = () => {
     },
     {
       name: "Premium Quarterly",
-      subscribers: 892,
+      subscribers: 892, 
       revenue: "$32,112",
       retention: 94,
       color: "bg-purple-500"
@@ -36,6 +41,42 @@ const SubscriptionOverview = () => {
     { date: "Dec 17", amount: "$19,380", subscriptions: 342 }
   ];
 
+  const handleViewAllSubscriptions = async () => {
+    setIsLoading(true);
+    
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      toast({
+        title: "Subscriptions Loaded",
+        description: "Opening detailed subscription management interface",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load subscription details",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePlanClick = (planName: string) => {
+    toast({
+      title: "Plan Details",
+      description: `Viewing details for ${planName}`,
+    });
+  };
+
+  const handleBillingClick = (date: string, amount: string) => {
+    toast({
+      title: "Billing Details",
+      description: `Viewing billing details for ${date}: ${amount}`,
+    });
+  };
+
   return (
     <Card className="border-0 shadow-sm">
       <CardHeader>
@@ -50,7 +91,10 @@ const SubscriptionOverview = () => {
           {subscriptionPlans.map((plan) => (
             <div key={plan.name} className="space-y-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center">
+                <div 
+                  className="flex items-center cursor-pointer hover:opacity-80"
+                  onClick={() => handlePlanClick(plan.name)}
+                >
                   <div className={`w-3 h-3 rounded-full ${plan.color} mr-3`} />
                   <span className="font-medium text-slate-900">{plan.name}</span>
                 </div>
@@ -72,7 +116,11 @@ const SubscriptionOverview = () => {
           </h4>
           <div className="space-y-2">
             {upcomingBilling.map((billing) => (
-              <div key={billing.date} className="flex items-center justify-between py-2">
+              <div 
+                key={billing.date} 
+                className="flex items-center justify-between py-2 cursor-pointer hover:bg-slate-50 rounded px-2 -mx-2"
+                onClick={() => handleBillingClick(billing.date, billing.amount)}
+              >
                 <div className="flex items-center">
                   <Clock className="h-4 w-4 text-slate-400 mr-2" />
                   <span className="text-sm text-slate-600">{billing.date}</span>
@@ -86,8 +134,13 @@ const SubscriptionOverview = () => {
           </div>
         </div>
 
-        <Button className="w-full" variant="outline">
-          View All Subscriptions
+        <Button 
+          className="w-full" 
+          variant="outline" 
+          onClick={handleViewAllSubscriptions}
+          disabled={isLoading}
+        >
+          {isLoading ? "Loading..." : "View All Subscriptions"}
         </Button>
       </CardContent>
     </Card>
